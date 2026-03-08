@@ -265,7 +265,7 @@ body {
 }
 .flashcard {
   width: 320px;
-  height: 380px;
+  height: 440px;
   perspective: 1000px;
   cursor: pointer;
 }
@@ -309,6 +309,8 @@ body {
 .flashcard-back {
   background: var(--card);
   transform: rotateY(180deg);
+  overflow-y: auto;
+  padding: 20px 16px;
 }
 .flashcard-back .char-small {
   font-size: 60px;
@@ -322,6 +324,31 @@ body {
 }
 .flashcard-back .meaning-display {
   font-size: 1.3em;
+  color: var(--text-light);
+}
+.flashcard-back .phrases-display {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+  width: 100%;
+  text-align: center;
+}
+.flashcard-back .phrase-item {
+  font-size: 0.85em;
+  color: var(--text);
+  margin: 4px 0;
+  line-height: 1.4;
+}
+.flashcard-back .phrase-item .phrase-zh {
+  font-weight: 700;
+  font-size: 1.1em;
+  color: var(--primary);
+}
+.flashcard-back .phrase-item .phrase-py {
+  color: var(--secondary);
+  margin: 0 4px;
+}
+.flashcard-back .phrase-item .phrase-en {
   color: var(--text-light);
 }
 
@@ -670,6 +697,111 @@ body {
   opacity: 1;
 }
 
+/* ===== Phrase Builder Screen ===== */
+.phrase-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+.phrase-target {
+  text-align: center;
+}
+.phrase-target .phrase-prompt {
+  font-size: 0.95em;
+  color: var(--text-light);
+  margin-bottom: 8px;
+}
+.phrase-target .phrase-meaning {
+  font-size: 1em;
+  color: var(--text-light);
+  margin-top: 8px;
+}
+.phrase-slots {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  min-height: 68px;
+  align-items: center;
+}
+.phrase-slot {
+  width: 60px;
+  height: 60px;
+  border: 3px dashed #ccc;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2em;
+  font-weight: 700;
+  background: var(--card);
+  transition: var(--transition);
+}
+.phrase-slot.fixed {
+  border: 3px solid var(--primary);
+  background: #F0EDFF;
+  color: var(--primary);
+}
+.phrase-slot.filled {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.phrase-slot.correct-slot {
+  border-color: #2E7D32;
+  background: #E8F5E9;
+  color: #2E7D32;
+}
+.phrase-slot.wrong-slot {
+  border-color: #C62828;
+  background: #FFEBEE;
+  color: #C62828;
+}
+.phrase-choices {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+.phrase-choice-btn {
+  padding: 14px 8px;
+  border: 2px solid #E8E8E8;
+  border-radius: 12px;
+  background: var(--card);
+  font-size: 1.8em;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: center;
+}
+.phrase-choice-btn:hover:not(.disabled) {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108,99,255,0.2);
+}
+.phrase-choice-btn.selected {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.phrase-choice-btn.disabled {
+  pointer-events: none;
+}
+.phrase-feedback {
+  font-size: 1.1em;
+  font-weight: 600;
+  min-height: 1.5em;
+  text-align: center;
+}
+.phrase-hint {
+  font-size: 0.9em;
+  color: var(--text-light);
+  text-align: center;
+  min-height: 1.3em;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
   .header h1 { font-size: 1.6em; }
@@ -683,6 +815,9 @@ body {
   .match-grid.size-12, .match-grid.size-16 { grid-template-columns: repeat(4, 1fr); }
   .writing-reference { flex-direction: column; gap: 10px; padding: 16px; }
   .writing-reference .ref-char { font-size: 60px; }
+  .phrase-choices { grid-template-columns: repeat(3, 1fr); }
+  .phrase-slot { width: 50px; height: 50px; font-size: 1.6em; }
+  .phrase-choice-btn { font-size: 1.4em; padding: 10px 6px; }
 }
 
 /* ===== Confetti ===== */
@@ -781,6 +916,11 @@ body {
             <span class="mode-name">Writing</span>
             <span class="mode-desc">书写练习 · Trace & write</span>
           </button>
+          <button class="mode-btn" data-mode="phrases" onclick="selectMode('phrases')">
+            <span class="mode-icon">📝</span>
+            <span class="mode-name">Phrase Builder</span>
+            <span class="mode-desc">组词造句 · Build words from characters</span>
+          </button>
         </div>
       </div>
 
@@ -819,6 +959,7 @@ body {
             <div class="char-small" id="fcCharBack">汉</div>
             <div class="pinyin-display" id="fcPinyin">hàn</div>
             <div class="meaning-display" id="fcMeaning">Chinese</div>
+            <div class="phrases-display" id="fcPhrases"></div>
           </div>
         </div>
       </div>
@@ -875,6 +1016,23 @@ body {
       <div class="progress-bar-container">
         <div class="progress-bar-fill" id="writeProgress" style="width:0%"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Phrase Builder Mode -->
+  <div class="screen" id="phrasesScreen">
+    <div class="phrase-area">
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="phraseProgress" style="width:0%"></div>
+      </div>
+      <div class="phrase-target">
+        <div class="phrase-prompt" id="phrasePrompt">Build a word using this character:</div>
+        <div class="phrase-slots" id="phraseSlots"></div>
+        <div class="phrase-meaning" id="phraseMeaning"></div>
+      </div>
+      <div class="phrase-hint" id="phraseHint"></div>
+      <div class="phrase-choices" id="phraseChoices"></div>
+      <div class="phrase-feedback" id="phraseFeedback"></div>
     </div>
   </div>
 

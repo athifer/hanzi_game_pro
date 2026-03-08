@@ -201,6 +201,7 @@ function startGame() {
     quiz: '❓ Quiz · Grade ' + state.selectedGrade,
     match: '🧩 Memory Match · Grade ' + state.selectedGrade,
     writing: '✍️ Writing · Grade ' + state.selectedGrade,
+    phrases: '📝 Phrase Builder · Grade ' + state.selectedGrade,
   };
   document.getElementById('gameTitle').textContent = modeNames[state.selectedMode] || '';
 
@@ -210,6 +211,7 @@ function startGame() {
     case 'quiz': initQuiz(); break;
     case 'match': initMatch(); break;
     case 'writing': initWriting(); break;
+    case 'phrases': initPhrases(); break;
   }
 }
 
@@ -241,6 +243,19 @@ function showFlashcard() {
   document.getElementById('fcCharBack').textContent = c.char;
   document.getElementById('fcPinyin').textContent = c.pinyin;
   document.getElementById('fcMeaning').textContent = c.meaning;
+
+  // Show phrases on back of card
+  const phrasesEl = document.getElementById('fcPhrases');
+  phrasesEl.innerHTML = '';
+  if (c.phrases && c.phrases.length > 0) {
+    c.phrases.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'phrase-item';
+      div.innerHTML = `<span class="phrase-zh">${p.zh}</span> <span class="phrase-py">${p.py}</span> <span class="phrase-en">${p.en}</span>`;
+      phrasesEl.appendChild(div);
+    });
+  }
+
   document.getElementById('flashcard').classList.remove('flipped');
 
   const pct = (fcState.index / fcState.chars.length) * 100;
@@ -595,6 +610,200 @@ function onPointerMove(e) {
 function onPointerUp(e) {
   drawing = false;
   lastPos = null;
+}
+
+// =============================================
+// ===== PHRASE BUILDER MODE =====
+// =============================================
+let phraseState = { rounds: [], index: 0, answered: false, selectedSlots: [] };
+
+function initPhrases() {
+  showScreen('phrasesScreen');
+
+  // Build rounds: for each character that has phrases, create a puzzle
+  const charsWithPhrases = state.characters.filter(c => c.phrases && c.phrases.length > 0);
+  const selected = charsWithPhrases.slice(0, ROUND_SIZE);
+  const allChars = CHARACTERS_BY_GRADE[state.selectedGrade] || [];
+
+  phraseState.rounds = selected.map(c => {
+    // Pick a random phrase for this character
+    const phrase = c.phrases[Math.floor(Math.random() * c.phrases.length)];
+    const wordChars = [...phrase.zh]; // array of characters in the phrase
+
+    // Find the position of the target character in the phrase
+    const targetIdx = wordChars.indexOf(c.char);
+
+    // The missing characters are all chars except the target
+    const missingIndices = [];
+    for (let i = 0; i < wordChars.length; i++) {
+      if (i !== targetIdx) missingIndices.push(i);
+    }
+    const missingChars = missingIndices.map(i => wordChars[i]);
+
+    // Generate distracting characters (wrong answers)
+    // Pick chars from the same grade that are NOT in the phrase
+    const phraseCharSet = new Set(wordChars);
+    const distractorPool = allChars
+      .filter(x => !phraseCharSet.has(x.char))
+      .map(x => x.char);
+
+    // We want enough distractors to fill a grid of choices
+    // Total choices = missing chars + distractors, shown in a grid
+    const numDistractors = Math.max(4, 8 - missingChars.length);
+    const distractors = pickRandom(distractorPool, numDistractors);
+    const allChoices = shuffle([...missingChars, ...distractors.slice(0, numDistractors)]);
+
+    return {
+      char: c,
+      phrase: phrase,
+      wordChars: wordChars,
+      targetIdx: targetIdx,
+      missingIndices: missingIndices,
+      missingChars: missingChars,
+      allChoices: allChoices,
+    };
+  });
+
+  phraseState.index = 0;
+  phraseState.answered = false;
+  showPhraseRound();
+}
+
+function showPhraseRound() {
+  if (phraseState.index >= phraseState.rounds.length) {
+    finishGame();
+    return;
+  }
+
+  const round = phraseState.rounds[phraseState.index];
+  phraseState.answered = false;
+  phraseState.selectedSlots = [];
+
+  // Update progress
+  const pct = (phraseState.index / phraseState.rounds.length) * 100;
+  document.getElementById('phraseProgress').style.width = pct + '%';
+
+  // Prompt
+  document.getElementById('phrasePrompt').textContent =
+    `Build a word using 「${round.char.char}」 / 用「${round.char.char}」组一个词`;
+
+  // Show phrase meaning as hint
+  document.getElementById('phraseHint').textContent =
+    `Hint: ${round.phrase.py} — ${round.phrase.en}`;
+
+  // Build slots
+  const slotsEl = document.getElementById('phraseSlots');
+  slotsEl.innerHTML = '';
+  round.wordChars.forEach((ch, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'phrase-slot';
+    slot.dataset.index = i;
+    if (i === round.targetIdx) {
+      // This is the given character (fixed)
+      slot.classList.add('fixed');
+      slot.textContent = ch;
+    } else {
+      // Empty slot to fill
+      slot.textContent = '';
+      slot.id = `phraseSlot_${i}`;
+    }
+    slotsEl.appendChild(slot);
+  });
+
+  // Show meaning below slots
+  document.getElementById('phraseMeaning').textContent = '';
+
+  // Build choices grid
+  const choicesEl = document.getElementById('phraseChoices');
+  choicesEl.innerHTML = '';
+  round.allChoices.forEach((ch, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'phrase-choice-btn';
+    btn.textContent = ch;
+    btn.dataset.char = ch;
+    btn.addEventListener('click', () => handlePhraseChoice(btn, ch));
+    choicesEl.appendChild(btn);
+  });
+
+  document.getElementById('phraseFeedback').textContent = '';
+}
+
+function handlePhraseChoice(btn, chosenChar) {
+  if (phraseState.answered) return;
+  const round = phraseState.rounds[phraseState.index];
+
+  // Find the next empty slot to fill
+  const nextMissing = round.missingIndices.find(i => !phraseState.selectedSlots.some(s => s.slotIdx === i));
+  if (nextMissing === undefined) return;
+
+  // Place the chosen character in the slot
+  const slotEl = document.getElementById(`phraseSlot_${nextMissing}`);
+  if (slotEl) {
+    slotEl.textContent = chosenChar;
+    slotEl.classList.add('filled');
+  }
+  btn.classList.add('selected');
+
+  phraseState.selectedSlots.push({
+    slotIdx: nextMissing,
+    char: chosenChar,
+    correctChar: round.wordChars[nextMissing],
+    btnEl: btn,
+  });
+
+  // Check if all slots are filled
+  if (phraseState.selectedSlots.length === round.missingIndices.length) {
+    phraseState.answered = true;
+
+    // Check correctness
+    const allCorrect = phraseState.selectedSlots.every(s => s.char === s.correctChar);
+
+    // Disable all choice buttons
+    document.querySelectorAll('.phrase-choice-btn').forEach(b => b.classList.add('disabled'));
+
+    if (allCorrect) {
+      // Mark all slots correct
+      round.missingIndices.forEach(i => {
+        const el = document.getElementById(`phraseSlot_${i}`);
+        if (el) el.classList.add('correct-slot');
+      });
+      addScore(15);
+      playCorrect();
+      document.getElementById('phraseFeedback').textContent = `✅ ${round.phrase.zh} — ${round.phrase.en}`;
+      document.getElementById('phraseFeedback').style.color = '#2E7D32';
+    } else {
+      // Mark wrong slots, show correct answer
+      phraseState.selectedSlots.forEach(s => {
+        const el = document.getElementById(`phraseSlot_${s.slotIdx}`);
+        if (el) {
+          if (s.char === s.correctChar) {
+            el.classList.add('correct-slot');
+          } else {
+            el.classList.add('wrong-slot');
+            // Show correct char
+            setTimeout(() => {
+              el.textContent = s.correctChar;
+              el.classList.remove('wrong-slot');
+              el.classList.add('correct-slot');
+            }, 800);
+          }
+        }
+      });
+      resetStreak();
+      playWrong();
+      document.getElementById('phraseFeedback').textContent = `❌ The word is: ${round.phrase.zh} (${round.phrase.en})`;
+      document.getElementById('phraseFeedback').style.color = '#C62828';
+    }
+
+    // Show meaning
+    document.getElementById('phraseMeaning').textContent = `${round.phrase.py} — ${round.phrase.en}`;
+
+    // Auto-advance
+    setTimeout(() => {
+      phraseState.index++;
+      showPhraseRound();
+    }, 2000);
+  }
 }
 
 // =============================================

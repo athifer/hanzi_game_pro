@@ -5,6 +5,7 @@ Generate web/js/characters.js from official Chinese character data.
 Uses:
 - hanziDB dataset (based on Jun Da's frequency list) for frequency rank, stroke count,
   pinyin, definitions, and 通用规范汉字表 (general_standard_num)
+- CC-CEDICT dictionary for mining common 2-4 character phrases per character
 - Characters are sorted by frequency rank (most common first) with stroke count
   as a secondary criterion (simpler characters first among same frequency tier)
 
@@ -21,7 +22,9 @@ Grade distribution (8 grades, ~3500 chars from 通用规范汉字表 Level 1):
 """
 
 import csv
+import gzip
 import io
+import json
 import os
 import re
 import ssl
@@ -172,6 +175,124 @@ def download_hanzi_db():
     return entries
 
 
+CEDICT_URL = "https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz"
+
+
+def download_cedict():
+    """Download and parse CC-CEDICT. Returns list of (simplified, pinyin, english) tuples."""
+    print("  Downloading CC-CEDICT...")
+    req = urllib.request.Request(CEDICT_URL, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = gzip.decompress(resp.read()).decode("utf-8", errors="replace")
+
+    entries = []
+    for line in data.splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        m = re.match(r"(\S+)\s+(\S+)\s+\[([^\]]+)\]\s+/(.+)/", line)
+        if not m:
+            continue
+        _trad, simp, pinyin_raw, meaning = m.groups()
+        entries.append((simp, pinyin_raw, meaning))
+    print(f"  CC-CEDICT: {len(entries)} total entries")
+    return entries
+
+
+def mine_phrases(cedict_entries, char_set, char_to_grade, max_per_char=3):
+    """
+    For each character in char_set, find the best 2-4 character compound words
+    from CC-CEDICT where ALL constituent characters are in our char_set.
+
+    Prefers shorter phrases and phrases where all chars are from the same or
+    lower grade as the target character.
+
+    Returns dict: char -> list of {zh, pinyin, en}
+    """
+    # Build frequency rank lookup for scoring  
+    # Index all CEDICT entries containing chars from our set
+    # Only consider 2-4 char simplified entries where all chars are in char_set
+    candidates = {}  # char -> list of (word, pinyin, english, score)
+
+    for simp, pinyin_raw, meaning in cedict_entries:
+        word_len = len(simp)
+        if word_len < 2 or word_len > 4:
+            continue
+        # All characters must be CJK and in our set
+        if not all('\u4e00' <= c <= '\u9fff' and c in char_set for c in simp):
+            continue
+
+        # Convert pinyin
+        pinyin = convert_pinyin_numbers(pinyin_raw)
+
+        # Clean up meaning - take first definition, skip variants/references
+        meanings = meaning.split("/")
+        clean = []
+        for mg in meanings:
+            mg = mg.strip()
+            if not mg:
+                continue
+            if mg.startswith("variant of") or mg.startswith("old variant"):
+                continue
+            if mg.startswith("see ") and "[" in mg:
+                continue
+            if mg.startswith("CL:"):
+                continue
+            clean.append(mg)
+        if not clean:
+            continue
+        best_meaning = clean[0]
+        if len(best_meaning) > 40:
+            best_meaning = best_meaning[:37] + "..."
+
+        # Score: prefer shorter words, prefer words where all chars are low grade
+        max_grade = max(char_to_grade.get(c, 99) for c in simp)
+        # Lower score = better. Prefer 2-char words, then sorted by max grade of components.
+        score = word_len * 10 + max_grade
+
+        for ch in simp:
+            if ch not in candidates:
+                candidates[ch] = []
+            candidates[ch].append({
+                "zh": simp,
+                "pinyin": pinyin,
+                "en": best_meaning,
+                "score": score,
+                "max_grade": max_grade,
+            })
+
+    # For each character, pick the best phrases
+    result = {}
+    for ch in char_set:
+        if ch not in candidates:
+            result[ch] = []
+            continue
+
+        # Sort by score (lower = better), deduplicate by zh
+        seen = set()
+        unique = []
+        for p in sorted(candidates[ch], key=lambda x: x["score"]):
+            if p["zh"] not in seen:
+                seen.add(p["zh"])
+                unique.append(p)
+
+        # Prefer phrases where max_grade <= this char's grade (contextually appropriate)
+        this_grade = char_to_grade.get(ch, 99)
+        appropriate = [p for p in unique if p["max_grade"] <= this_grade]
+        
+        # Fill from appropriate first, then from all
+        picked = appropriate[:max_per_char]
+        if len(picked) < max_per_char:
+            for p in unique:
+                if p["zh"] not in {x["zh"] for x in picked}:
+                    picked.append(p)
+                    if len(picked) >= max_per_char:
+                        break
+
+        result[ch] = [{"zh": p["zh"], "pinyin": p["pinyin"], "en": p["en"]} for p in picked]
+
+    return result
+
+
 # ── Main generation ──
 
 def main():
@@ -235,8 +356,28 @@ def main():
               f"avg freq rank: {avg_freq:>6.0f} | avg strokes: {avg_strk:.1f} | "
               f"sample: {sample}...")
 
-    # 5. Build JavaScript output
-    print(f"\n5. Generating characters.js...")
+    # 5. Download CC-CEDICT and mine phrases
+    print(f"\n5. Downloading CC-CEDICT for phrase mining...")
+    cedict_entries = download_cedict()
+
+    # Build char_set and char_to_grade lookup
+    char_set = set()
+    char_to_grade = {}
+    for grade in sorted(grades.keys()):
+        for entry in grades[grade]:
+            char_set.add(entry["char"])
+            char_to_grade[entry["char"]] = grade
+
+    print(f"   Mining phrases for {len(char_set)} characters...")
+    phrases = mine_phrases(cedict_entries, char_set, char_to_grade, max_per_char=3)
+
+    with_phrases = sum(1 for ch in char_set if phrases.get(ch))
+    total_phrases = sum(len(v) for v in phrases.values())
+    print(f"   Characters with phrases: {with_phrases}/{len(char_set)}")
+    print(f"   Total phrases mined: {total_phrases}")
+
+    # 6. Build JavaScript output
+    print(f"\n6. Generating characters.js...")
     missing = 0
     total_chars = 0
 
@@ -246,7 +387,8 @@ def main():
     js_lines.append(" * Based on 通用规范汉字表 (Table of General Standard Chinese Characters) Level 1: 3500 常用字")
     js_lines.append(" * Characters sorted by frequency rank (Jun Da's Modern Chinese Character Frequency List)")
     js_lines.append(" * with stroke count as secondary sort (simpler characters first).")
-    js_lines.append(" * Data source: hanziDB.csv (frequency, stroke count, pinyin, definitions)")
+    js_lines.append(" * Phrases mined from CC-CEDICT (2-4 char compounds using chars from same/lower grade).")
+    js_lines.append(" * Data sources: hanziDB.csv + CC-CEDICT")
     js_lines.append(" * Auto-generated by scripts/generate_characters_js.py")
     js_lines.append(" */")
     js_lines.append("")
@@ -263,9 +405,22 @@ def main():
             if meaning == "(no definition)" or pinyin == "?":
                 missing += 1
             # Escape quotes
-            meaning = meaning.replace("\\", "\\\\").replace('"', '\\"')
-            pinyin = pinyin.replace("\\", "\\\\").replace('"', '\\"')
-            js_lines.append(f'    {{ char: "{ch}", pinyin: "{pinyin}", meaning: "{meaning}" }},')
+            meaning_esc = meaning.replace("\\", "\\\\").replace('"', '\\"')
+            pinyin_esc = pinyin.replace("\\", "\\\\").replace('"', '\\"')
+
+            # Build phrases array
+            char_phrases = phrases.get(ch, [])
+            if char_phrases:
+                ph_parts = []
+                for p in char_phrases:
+                    pzh = p["zh"].replace("\\", "\\\\").replace('"', '\\"')
+                    ppy = p["pinyin"].replace("\\", "\\\\").replace('"', '\\"')
+                    pen = p["en"].replace("\\", "\\\\").replace('"', '\\"')
+                    ph_parts.append(f'{{zh:"{pzh}",py:"{ppy}",en:"{pen}"}}')
+                phrases_str = "[" + ",".join(ph_parts) + "]"
+                js_lines.append(f'    {{ char: "{ch}", pinyin: "{pinyin_esc}", meaning: "{meaning_esc}", phrases: {phrases_str} }},')
+            else:
+                js_lines.append(f'    {{ char: "{ch}", pinyin: "{pinyin_esc}", meaning: "{meaning_esc}", phrases: [] }},')
         js_lines.append(f"  ],")
 
     js_lines.append("};")
@@ -297,6 +452,8 @@ def main():
     print(f"Done! Generated {OUTPUT_FILE}")
     print(f"  Total characters: {total_chars}")
     print(f"  Missing pinyin/meaning: {missing}")
+    print(f"  Characters with phrases: {with_phrases}/{total_chars}")
+    print(f"  Total phrases: {total_phrases}")
     for g in sorted(grades.keys()):
         print(f"  Grade {g}: {len(grades[g])} characters")
     print(f"{'=' * 60}")

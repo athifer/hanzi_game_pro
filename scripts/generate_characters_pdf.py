@@ -17,7 +17,9 @@ OUT_HTML = os.path.join(PROJECT_DIR, "characters_by_grade.html")
 
 
 def parse_characters_js(path: str) -> dict[int, list[dict]]:
-    """Parse characters.js and return {grade: [{char, pinyin, meaning}, ...]}."""
+    """Parse characters.js and return {grade: [{char, pinyin, meaning, phrases}, ...]}."""
+    import json as _json
+
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
@@ -39,9 +41,23 @@ def parse_characters_js(path: str) -> dict[int, list[dict]]:
                 stripped,
             )
             if m:
-                grades[current_grade].append(
-                    {"char": m.group(1), "pinyin": m.group(2), "meaning": m.group(3)}
-                )
+                entry = {
+                    "char": m.group(1),
+                    "pinyin": m.group(2),
+                    "meaning": m.group(3),
+                    "phrases": [],
+                }
+                # Extract phrases array if present
+                pm = re.search(r'phrases:\s*\[(.*?)\]', stripped)
+                if pm and pm.group(1).strip():
+                    # Parse individual phrase objects: {zh:"...",py:"...",en:"..."}
+                    for ph in re.finditer(r'\{zh:"(.*?)",py:"(.*?)",en:"(.*?)"\}', pm.group(1)):
+                        entry["phrases"].append({
+                            "zh": ph.group(1),
+                            "py": ph.group(2),
+                            "en": ph.group(3),
+                        })
+                grades[current_grade].append(entry)
             if stripped == "],":
                 current_grade = None
 
@@ -59,13 +75,21 @@ def build_html(grades: dict[int, list[dict]]) -> str:
             f'<span class="ch" title="{c["pinyin"]} — {c["meaning"]}">{c["char"]}</span>'
             for c in chars
         )
-        # Detailed table (pinyin + meaning)
-        rows = "".join(
-            f'<tr><td class="big">{c["char"]}</td>'
-            f'<td>{c["pinyin"]}</td>'
-            f'<td>{c["meaning"]}</td></tr>'
-            for c in chars
-        )
+        # Detailed table (pinyin + meaning + phrases)
+        rows = ""
+        for c in chars:
+            phrase_html = ""
+            if c.get("phrases"):
+                phrase_parts = []
+                for p in c["phrases"]:
+                    phrase_parts.append(f'{p["zh"]} ({p["py"]}) {p["en"]}')
+                phrase_html = "<br>".join(phrase_parts)
+            rows += (
+                f'<tr><td class="big">{c["char"]}</td>'
+                f'<td>{c["pinyin"]}</td>'
+                f'<td>{c["meaning"]}</td>'
+                f'<td class="phrases-col">{phrase_html}</td></tr>'
+            )
         grade_sections.append(f"""
         <section class="grade">
           <h2>Grade {grade}（{grade}年级）— {len(chars)} characters</h2>
@@ -80,7 +104,7 @@ def build_html(grades: dict[int, list[dict]]) -> str:
 <html lang="zh">
 <head>
   <meta charset="utf-8" />
-  <title>Chinese Characters by Grade (1–6)</title>
+  <title>Chinese Characters by Grade (1–8)</title>
   <style>
     @page {{ size: A4; margin: 16mm; }}
     * {{ box-sizing: border-box; }}
@@ -114,6 +138,7 @@ def build_html(grades: dict[int, list[dict]]) -> str:
     }}
     td {{ padding: 2px 8px; border-bottom: 1px solid #eee; }}
     .big {{ font-size: 16pt; text-align: center; width: 40px; }}
+    .phrases-col {{ font-size: 9pt; color: #666; line-height: 1.4; }}
     @media print {{
       details {{ display: none; }}
       .ch:hover {{ background: none; }}

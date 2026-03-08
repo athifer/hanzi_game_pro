@@ -2,7 +2,7 @@
 
 An interactive web-based game for kids in **grades 1–8** to learn and practice Chinese characters (汉字). Covers **~3,500 commonly used characters** from the 通用规范汉字表 (Table of General Standard Chinese Characters), sorted by frequency. No installation required — just open a file in your browser.
 
-![Grade Selection](https://img.shields.io/badge/Grades-1--8-6C63FF) ![Characters](https://img.shields.io/badge/Characters-3500-FF6584) ![Modes](https://img.shields.io/badge/Game%20Modes-4-43E97B) ![No Dependencies](https://img.shields.io/badge/Dependencies-None-FFD700)
+![Grade Selection](https://img.shields.io/badge/Grades-1--8-6C63FF) ![Characters](https://img.shields.io/badge/Characters-3500-FF6584) ![Modes](https://img.shields.io/badge/Game%20Modes-5-43E97B) ![No Dependencies](https://img.shields.io/badge/Dependencies-None-FFD700)
 
 ---
 
@@ -62,10 +62,11 @@ Select a grade level from 1 to 8. Characters are drawn from the 通用规范汉�
 
 | Mode | Icon | Description |
 |------|------|-------------|
-| **Flashcards** | 🃏 | See a character → tap to flip and reveal pinyin & meaning → mark "Know It" or "Don't Know." Missed characters repeat at the end for reinforcement. |
+| **Flashcards** | 🃏 | See a character → tap to flip and reveal pinyin, meaning, & example phrases → mark "Know It" or "Don't Know." Missed characters repeat at the end for reinforcement. |
 | **Quiz** | ❓ | Multiple-choice questions. Alternates between "What does it mean?" and "What is the pinyin?" — 4 options each round. |
 | **Memory Match** | 🧩 | A 12-card memory game. Flip cards to match each character with its pinyin. Fewest moves wins! |
 | **Writing** | ✍️ | Practice writing characters on a drawing canvas with guide grid lines and a ghost overlay you can show/hide for tracing. |
+| **Phrase Builder** | 📝 | Given a target character, fill in the missing characters to form a real 2-4 character word. Hints show pinyin and meaning. |
 
 ### 3. Play & Score
 
@@ -95,10 +96,15 @@ hanzi_game_pro/
 
 ### Character Data
 
-The game ships with **~3,500 built-in characters** in `web/js/characters.js` — no CSV download needed. Characters are sourced from the **通用规范汉字表** Level 1, enriched with pinyin and English meanings from **hanziDB** (based on Jun Da's frequency list and CC-CEDICT). Characters are sorted by **frequency rank** (most common first) with **stroke count** as a tiebreaker (simpler first), then split into 8 progressive grades. Each character entry looks like:
+The game ships with **~3,500 built-in characters** in `web/js/characters.js` — no CSV download needed. Characters are sourced from the **通用规范汉字表** Level 1, enriched with pinyin and English meanings from **hanziDB** (based on Jun Da's frequency list). Each character also includes **2-3 common phrases** mined from **CC-CEDICT** (using only characters from the same or lower grade). Characters are sorted by **frequency rank** (most common first) with **stroke count** as a tiebreaker (simpler first), then split into 8 progressive grades. Each character entry looks like:
 
 ```javascript
-{ char: "山", pinyin: "shān", meaning: "mountain" }
+{ char: "山", pinyin: "shān", meaning: "mountain",
+  phrases: [
+    {zh:"山水", py:"shān shuǐ", en:"landscape"},
+    {zh:"火山", py:"huǒ shān", en:"volcano"}
+  ]
+}
 ```
 
 To regenerate the character data from scratch:
