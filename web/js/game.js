@@ -145,7 +145,7 @@ function goHome() {
 function initHome() {
   const grid = document.getElementById('gradeGrid');
   grid.innerHTML = '';
-  for (let g = 1; g <= 9; g++) {
+  for (let g = 1; g <= 6; g++) {
     const count = getGradeCharCount(g);
     const btn = document.createElement('button');
     btn.className = 'grade-btn';

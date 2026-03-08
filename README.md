@@ -1,8 +1,8 @@
 # 汉字大冒险 — Chinese Character Adventure
 
-An interactive web-based game for kids in **grades 1–9** to learn and practice Chinese characters (汉字). No installation required — just open a file in your browser.
+An interactive web-based game for kids in **grades 1–6** to learn and practice Chinese characters (汉字). Covers **~3,500 commonly used characters** from the 通用规范汉字表 (Table of General Standard Chinese Characters). No installation required — just open a file in your browser.
 
-![Grade Selection](https://img.shields.io/badge/Grades-1--9-6C63FF) ![Characters](https://img.shields.io/badge/Characters-540+-FF6584) ![Modes](https://img.shields.io/badge/Game%20Modes-4-43E97B) ![No Dependencies](https://img.shields.io/badge/Dependencies-None-FFD700)
+![Grade Selection](https://img.shields.io/badge/Grades-1--6-6C63FF) ![Characters](https://img.shields.io/badge/Characters-3500-FF6584) ![Modes](https://img.shields.io/badge/Game%20Modes-4-43E97B) ![No Dependencies](https://img.shields.io/badge/Dependencies-None-FFD700)
 
 ---
 
@@ -45,19 +45,16 @@ php -S localhost:8765 -t web
 
 ### 1. Choose a Grade (年级)
 
-Select a grade level from 1 to 9. Each grade has ~60 characters matched to the standard Chinese education curriculum:
+Select a grade level from 1 to 6. Characters are drawn from the 通用规范汉字表 Level 1 (~3,500 common characters), sorted by frequency and split across six grades:
 
-| Grade | Theme | Example Characters |
-|-------|-------|--------------------|
-| **1** | Numbers, nature, basic words | 一 二 三 人 大 小 山 水 |
-| **2** | Seasons, colors, family, verbs | 春 夏 红 蓝 爸 妈 吃 喝 |
-| **3** | School, body, food, actions | 语 文 教 习 头 脸 饭 菜 |
-| **4** | Places, animals, daily life | 城 河 猫 狗 龙 虎 买 卖 |
-| **5** | Country, sports, movement | 国 民 球 游 推 拉 请 谢 |
-| **6** | Emotions, senses, adjectives | 感 觉 甜 苦 冷 热 难 易 |
-| **7** | Society, economy, environment | 政 法 商 钱 环 保 研 究 |
-| **8** | History, literature, mythology | 古 朝 诗 词 神 仙 智 慧 |
-| **9** | Abstract thinking, systems | 哲 逻 变 化 创 技 系 统 |
+| Grade | Characters | Description |
+|-------|-----------|-------------|
+| **1** | 600 | Most frequently used characters |
+| **2** | 600 | High-frequency characters |
+| **3** | 600 | Upper-mid frequency characters |
+| **4** | 600 | Mid-frequency characters |
+| **5** | 600 | Lower-mid frequency characters |
+| **6** | 500 | Less common but still standard characters |
 
 ### 2. Pick a Game Mode (游戏模式)
 
@@ -80,23 +77,39 @@ Select a grade level from 1 to 9. Each grade has ~60 characters matched to the s
 ## Project Structure
 
 ```
-hanzi_game_repo_pro/
+hanzi_game_pro/
 ├── README.md
+├── characters_by_grade.html        # Printable character reference (open → Print → PDF)
 ├── scripts/
-│   └── build_datasets.py      # Downloads & builds CSV datasets (optional)
+│   ├── build_datasets.py           # Downloads & builds CSV datasets (optional)
+│   ├── generate_characters_js.py   # Regenerate web/js/characters.js from source data
+│   └── generate_characters_pdf.py  # Generate the printable character HTML page
 └── web/
-    ├── index.html              # Main game page — open this!
+    ├── index.html                  # Main game page — open this!
     └── js/
-        ├── characters.js       # 540 characters organized by grade 1-9
-        └── game.js             # Game engine: all 4 modes, scoring, UI
+        ├── characters.js           # ~3,500 characters organized by grades 1-6
+        └── game.js                 # Game engine: all 4 modes, scoring, UI
 ```
 
 ### Character Data
 
-The game ships with **540 built-in characters** in `web/js/characters.js` — no CSV download needed. Each character includes:
+The game ships with **~3,500 built-in characters** in `web/js/characters.js` — no CSV download needed. Characters are sourced from the **通用规范汉字表** Level 1, enriched with pinyin and English meanings from **CC-CEDICT**. Each character entry looks like:
 
 ```javascript
 { char: "山", pinyin: "shān", meaning: "mountain" }
+```
+
+To regenerate the character data from scratch:
+
+```bash
+python3 scripts/generate_characters_js.py
+```
+
+To generate a printable HTML reference of all characters by grade:
+
+```bash
+python3 scripts/generate_characters_pdf.py
+# Then open characters_by_grade.html in a browser and Print → Save as PDF
 ```
 
 ### Optional: Build Extended Datasets
