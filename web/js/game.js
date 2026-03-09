@@ -244,6 +244,16 @@ function showFlashcard() {
   document.getElementById('fcPinyin').textContent = c.pinyin;
   document.getElementById('fcMeaning').textContent = c.meaning;
 
+  // Show memory hint
+  const hintEl = document.getElementById('fcHint');
+  if (c.hint) {
+    hintEl.textContent = '💡 ' + c.hint;
+    hintEl.style.display = '';
+  } else {
+    hintEl.textContent = '';
+    hintEl.style.display = 'none';
+  }
+
   // Show phrases on back of card
   const phrasesEl = document.getElementById('fcPhrases');
   phrasesEl.innerHTML = '';
