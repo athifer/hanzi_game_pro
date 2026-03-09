@@ -176,6 +176,7 @@ def download_hanzi_db():
 
 
 CEDICT_URL = "https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz"
+JIEBA_DICT_URL = "https://raw.githubusercontent.com/fxsjy/jieba/master/jieba/dict.txt"
 
 
 def download_cedict():
@@ -198,33 +199,51 @@ def download_cedict():
     return entries
 
 
-def mine_phrases(cedict_entries, char_set, char_to_grade, max_per_char=3):
-    """
-    For each character in char_set, find the best 2-4 character compound words
-    from CC-CEDICT where ALL constituent characters are in our char_set.
+def download_word_frequency():
+    """Download jieba's word frequency dict. Returns dict: word -> frequency count."""
+    data = download(JIEBA_DICT_URL, "jieba word frequency dict (337k words)")
+    word_freq = {}
+    for line in data.splitlines():
+        parts = line.strip().split(" ")
+        if len(parts) >= 2:
+            word = parts[0]
+            try:
+                freq = int(parts[1])
+            except ValueError:
+                continue
+            if len(word) >= 2 and all('\u4e00' <= c <= '\u9fff' for c in word):
+                word_freq[word] = freq
+    print(f"  Loaded {len(word_freq)} multi-char Chinese word frequencies")
+    return word_freq
 
-    Prefers shorter phrases and phrases where all chars are from the same or
-    lower grade as the target character.
+
+def mine_phrases(cedict_entries, char_set, char_to_grade, word_freq, max_per_char=3):
+    """
+    For each character in char_set, find the most common 2-4 character compound
+    words from CC-CEDICT, scored by real word frequency (from jieba dict).
+
+    Filters:
+    - All constituent characters must be in our char_set
+    - Skips proper nouns (place names, person names) where possible
+    - Prefers high-frequency everyday words
 
     Returns dict: char -> list of {zh, pinyin, en}
     """
-    # Build frequency rank lookup for scoring  
-    # Index all CEDICT entries containing chars from our set
-    # Only consider 2-4 char simplified entries where all chars are in char_set
-    candidates = {}  # char -> list of (word, pinyin, english, score)
+    # Build candidates per character
+    candidates = {}  # char -> list of dicts
 
     for simp, pinyin_raw, meaning in cedict_entries:
         word_len = len(simp)
         if word_len < 2 or word_len > 4:
             continue
-        # All characters must be CJK and in our set
+        # All characters must be CJK and in our char_set
         if not all('\u4e00' <= c <= '\u9fff' and c in char_set for c in simp):
             continue
 
         # Convert pinyin
         pinyin = convert_pinyin_numbers(pinyin_raw)
 
-        # Clean up meaning - take first definition, skip variants/references
+        # Clean up meaning - take first definition, skip variants/references/classifiers
         meanings = meaning.split("/")
         clean = []
         for mg in meanings:
@@ -241,13 +260,23 @@ def mine_phrases(cedict_entries, char_set, char_to_grade, max_per_char=3):
         if not clean:
             continue
         best_meaning = clean[0]
+
+        # Skip entries that are likely proper nouns / place names / person names
+        # (pinyin starts with uppercase = proper noun in CEDICT convention)
+        pinyin_syllables = pinyin_raw.strip().split()
+        is_proper = all(s[0].isupper() for s in pinyin_syllables if s and s[0].isalpha())
+        if is_proper and word_len >= 2:
+            # Allow some common proper-noun-ish words through if very high frequency
+            freq = word_freq.get(simp, 0)
+            if freq < 5000:  # skip low-freq proper nouns
+                continue
+
         if len(best_meaning) > 40:
             best_meaning = best_meaning[:37] + "..."
 
-        # Score: prefer shorter words, prefer words where all chars are low grade
+        # Score by real word frequency (higher = more common = better)
+        freq = word_freq.get(simp, 0)
         max_grade = max(char_to_grade.get(c, 99) for c in simp)
-        # Lower score = better. Prefer 2-char words, then sorted by max grade of components.
-        score = word_len * 10 + max_grade
 
         for ch in simp:
             if ch not in candidates:
@@ -256,31 +285,36 @@ def mine_phrases(cedict_entries, char_set, char_to_grade, max_per_char=3):
                 "zh": simp,
                 "pinyin": pinyin,
                 "en": best_meaning,
-                "score": score,
+                "freq": freq,
                 "max_grade": max_grade,
             })
 
-    # For each character, pick the best phrases
+    # For each character, pick the best phrases by frequency
     result = {}
     for ch in char_set:
         if ch not in candidates:
             result[ch] = []
             continue
 
-        # Sort by score (lower = better), deduplicate by zh
+        # Sort by frequency descending (most common first), deduplicate
+        sorted_cands = sorted(candidates[ch], key=lambda x: -x["freq"])
         seen = set()
         unique = []
-        for p in sorted(candidates[ch], key=lambda x: x["score"]):
+        for p in sorted_cands:
             if p["zh"] not in seen:
                 seen.add(p["zh"])
                 unique.append(p)
 
-        # Prefer phrases where max_grade <= this char's grade (contextually appropriate)
+        # Prefer phrases where all chars are from same or lower grade
         this_grade = char_to_grade.get(ch, 99)
         appropriate = [p for p in unique if p["max_grade"] <= this_grade]
-        
-        # Fill from appropriate first, then from all
-        picked = appropriate[:max_per_char]
+
+        # Pick from grade-appropriate first (by freq), then fill from all
+        picked = []
+        for p in appropriate:
+            if len(picked) >= max_per_char:
+                break
+            picked.append(p)
         if len(picked) < max_per_char:
             for p in unique:
                 if p["zh"] not in {x["zh"] for x in picked}:
@@ -360,6 +394,10 @@ def main():
     print(f"\n5. Downloading CC-CEDICT for phrase mining...")
     cedict_entries = download_cedict()
 
+    # 5.5. Download word frequency data
+    print(f"\n5.5. Downloading word frequency data...")
+    word_freq = download_word_frequency()
+
     # Build char_set and char_to_grade lookup
     char_set = set()
     char_to_grade = {}
@@ -369,7 +407,7 @@ def main():
             char_to_grade[entry["char"]] = grade
 
     print(f"   Mining phrases for {len(char_set)} characters...")
-    phrases = mine_phrases(cedict_entries, char_set, char_to_grade, max_per_char=3)
+    phrases = mine_phrases(cedict_entries, char_set, char_to_grade, word_freq, max_per_char=3)
 
     with_phrases = sum(1 for ch in char_set if phrases.get(ch))
     total_phrases = sum(len(v) for v in phrases.values())
