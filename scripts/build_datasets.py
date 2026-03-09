@@ -1,4 +1,7 @@
 
+import json
+import os
+
 import pandas as pd
 import requests
 import zipfile
@@ -22,8 +25,13 @@ def build_characters():
 
     chars = []
     for line in txt:
-        j = eval(line)
-        chars.append(j["character"])
+        try:
+            j = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        ch = j.get("character", "")
+        if len(ch) == 1:
+            chars.append(ch)
 
     chars = list(dict.fromkeys(chars))[:3500]
 
@@ -79,6 +87,7 @@ def build_sentences():
     print("sentences_basic.csv created")
 
 def main():
+    os.makedirs(DATA_DIR, exist_ok=True)
     build_characters()
     build_words()
     build_sentences()

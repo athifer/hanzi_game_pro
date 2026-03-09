@@ -2874,15 +2874,7 @@ const CHARACTERS_BY_GRADE = {
     { char: "讳", pinyin: "huì", meaning: "conceal", hint: "讠 (speech) for meaning; 韦 for sound", phrases: [{zh:"忌讳",py:"jì huì",en:"taboo"},{zh:"直言不讳",py:"zhí yán bù huì",en:"to speak bluntly (idiom)"},{zh:"避讳",py:"bì huì",en:"to avoid a taboo word or topic"}] },
     { char: "啼", pinyin: "tí", meaning: "weep, whimper", hint: "口 (mouth) for meaning; 帝 for sound", phrases: [{zh:"啼哭",py:"tí kū",en:"to cry"},{zh:"哭哭啼啼",py:"kū ku tí tí",en:"to weep endlessly"},{zh:"啼笑皆非",py:"tí xiào jiē fēi",en:"lit. not to know whether to laugh or ..."}] },
     { char: "乍", pinyin: "zhà", meaning: "first time, for the first time", hint: "", phrases: [{zh:"乍得",py:"Zhà dé",en:"Chad"},{zh:"乍得湖",py:"Zhà dé Hú",en:"Lake Chad"},{zh:"初来乍到",py:"chū lái zhà dào",en:"to be a newcomer"}] },
-    { char: "瓣", pinyin: "bàn", meaning: "petal", hint: "瓜 (melon) for meaning; 
-
-
-
-
-
-
-
-辡 for sound", phrases: [{zh:"花瓣",py:"huā bàn",en:"petal"},{zh:"瓣膜",py:"bàn mó",en:"valve (biological)"},{zh:"二尖瓣",py:"èr jiān bàn",en:"mitral valve (physiology)"}] },
+    { char: "瓣", pinyin: "bàn", meaning: "petal", hint: "瓜 (melon) for meaning;         辡 for sound", phrases: [{zh:"花瓣",py:"huā bàn",en:"petal"},{zh:"瓣膜",py:"bàn mó",en:"valve (biological)"},{zh:"二尖瓣",py:"èr jiān bàn",en:"mitral valve (physiology)"}] },
     { char: "矫", pinyin: "jiǎo", meaning: "correct, rectify, straighten out", hint: "矢 (arrow) for meaning; 乔 for sound", phrases: [{zh:"矫正",py:"jiǎo zhèng",en:"to correct"},{zh:"矫健",py:"jiǎo jiàn",en:"strong and healthy"},{zh:"矫捷",py:"jiǎo jié",en:"vigorous and nimble"}] },
     { char: "跋", pinyin: "bá", meaning: "go by foot", hint: "足 (foot) for meaning; 犮 for sound", phrases: [{zh:"拓跋",py:"Tuò bá",en:"branch of the Xianbei 鮮卑|鲜卑 nomadic p..."},{zh:"跋涉",py:"bá shè",en:"to trudge"},{zh:"长途跋涉",py:"cháng tú bá shè",en:"long and difficult trek"}] },
     { char: "枉", pinyin: "wǎng", meaning: "useless, in vain", hint: "木 (wood) for meaning; 王 for sound", phrases: [{zh:"冤枉",py:"yuān wang",en:"to accuse wrongly"},{zh:"枉然",py:"wǎng rán",en:"in vain"},{zh:"冤枉钱",py:"yuān wang qián",en:"pointless expense"}] },

@@ -336,9 +336,10 @@ function showQuizQuestion() {
   let wrongPool = allChars.filter(x => x[field] !== correctAnswer);
   let wrongs = pickRandom(wrongPool, 3).map(x => x[field]);
 
-  // Deduplicate
+  // Deduplicate; guard against infinite loop when pool has few unique values
   const uniqueWrongs = [...new Set(wrongs)].slice(0, 3);
-  while (uniqueWrongs.length < 3) {
+  let safetyLimit = 200;
+  while (uniqueWrongs.length < 3 && safetyLimit-- > 0) {
     const extra = wrongPool[Math.floor(Math.random() * wrongPool.length)];
     if (extra && !uniqueWrongs.includes(extra[field]) && extra[field] !== correctAnswer) {
       uniqueWrongs.push(extra[field]);
@@ -455,7 +456,7 @@ function handleMatchClick(idx, el) {
   if (matchState.revealed.length === 2) {
     matchState.moves++;
     document.getElementById('matchMoves').textContent = matchState.moves;
-    state.total++;
+    // Note: state.total and state.correct are managed by addScore/resetStreak below
 
     const [a, b] = matchState.revealed;
 
@@ -466,8 +467,7 @@ function handleMatchClick(idx, el) {
         a.el.classList.add('matched');
         b.el.classList.add('matched');
         matchState.matched++;
-        state.correct++;
-        addScore(20);
+        addScore(20); // increments state.correct and state.total internally
         playMatch();
         document.getElementById('matchPairs').textContent = matchState.matched;
         matchState.revealed = [];

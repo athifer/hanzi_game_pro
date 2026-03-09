@@ -77,6 +77,8 @@ def convert_pinyin_numbers(pinyin_str):
             return syl
         if tone == 5 or tone == 0:
             return syl
+        if tone < 1 or tone > 4:  # guard against malformed tone digits
+            return syl
         syl = syl.replace("u:", "ü").replace("U:", "Ü")
         vowels = 'aeiouüAEIOUÜ'
         if 'a' in syl.lower():
@@ -106,6 +108,16 @@ def convert_pinyin_numbers(pinyin_str):
 
     parts = pinyin_str.split()
     return " ".join(convert_syllable(p) for p in parts)
+
+
+def escape_js_string(text):
+    """Escape text for safe embedding in double-quoted JavaScript strings."""
+    if text is None:
+        return ""
+    text = str(text)
+    text = text.replace("\\", "\\\\").replace('"', '\\"')
+    text = text.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    return text
 
 
 def download_hanzi_db():
@@ -511,24 +523,23 @@ def main():
             meaning = entry["meaning"]
             if meaning == "(no definition)" or pinyin == "?":
                 missing += 1
-            # Escape quotes
-            meaning_esc = meaning.replace("\\", "\\\\").replace('"', '\\"')
-            pinyin_esc = pinyin.replace("\\", "\\\\").replace('"', '\\"')
+            meaning_esc = escape_js_string(meaning)
+            pinyin_esc = escape_js_string(pinyin)
 
             # Build phrases array
             char_phrases = phrases.get(ch, [])
             ph_parts = []
             if char_phrases:
                 for p in char_phrases:
-                    pzh = p["zh"].replace("\\", "\\\\").replace('"', '\\"')
-                    ppy = p["pinyin"].replace("\\", "\\\\").replace('"', '\\"')
-                    pen = p["en"].replace("\\", "\\\\").replace('"', '\\"')
+                    pzh = escape_js_string(p["zh"])
+                    ppy = escape_js_string(p["pinyin"])
+                    pen = escape_js_string(p["en"])
                     ph_parts.append(f'{{zh:"{pzh}",py:"{ppy}",en:"{pen}"}}')
             phrases_str = "[" + ",".join(ph_parts) + "]"
 
             # Build hint
             hint = hints.get(ch, "")
-            hint_esc = hint.replace("\\", "\\\\").replace('"', '\\"')
+            hint_esc = escape_js_string(hint)
 
             js_lines.append(f'    {{ char: "{ch}", pinyin: "{pinyin_esc}", meaning: "{meaning_esc}", hint: "{hint_esc}", phrases: {phrases_str} }},')
         js_lines.append(f"  ],")
